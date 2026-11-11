@@ -1,0 +1,16 @@
+{
+  "language": "python",
+  "note": "Commits are pinned so everyone trains on the same code. Run scripts/download_dataset.py to fetch them into data/raw/.",
+  "projects": [
+    {"name": "TheAlgorithms/Python", "url": "https://github.com/TheAlgorithms/Python", "commit": "6e03a48579ca212a08b36be00378f887dc41a003", "license": "MIT", "py_files": 1608, "py_lines": 151916},
+    {"name": "psf/requests", "url": "https://github.com/psf/requests", "commit": "3c7baaa05ab4aa49cc819ce3a819d260de19c157", "license": "Apache-2.0", "py_files": 37, "py_lines": 12032},
+    {"name": "pallets/flask", "url": "https://github.com/pallets/flask", "commit": "49943b5a94413a530761350f04e896f76e8d620e", "license": "BSD-3-Clause", "py_files": 83, "py_lines": 18392},
+    {"name": "pallets/click", "url": "https://github.com/pallets/click", "commit": "2247b35ea1c47c727d7a06e51fa280e12a863ff6", "license": "BSD-3-Clause", "py_files": 91, "py_lines": 30378},
+    {"name": "pallets/jinja", "url": "https://github.com/pallets/jinja", "commit": "5ef70112a1ff19c05324ff889dd30405b1002044", "license": "BSD-3-Clause", "py_files": 60, "py_lines": 22875},
+    {"name": "Textualize/rich", "url": "https://github.com/Textualize/rich", "commit": "9d8f9a372cc5916fd4781fec207ced7ddac2f08f", "license": "MIT", "py_files": 213, "py_lines": 51866},
+    {"name": "encode/httpx", "url": "https://github.com/encode/httpx", "commit": "b5addb64f0161ff6bfe94c124ef76f6a1fba5254", "license": "BSD-3-Clause", "py_files": 60, "py_lines": 17753},
+    {"name": "tqdm/tqdm", "url": "https://github.com/tqdm/tqdm", "commit": "9cf5a12b1f955468a17f0ba3c59092b23e4258ac", "license": "MPL-2.0 / MIT", "py_files": 68, "py_lines": 9028},
+    {"name": "python-attrs/attrs", "url": "https://github.com/python-attrs/attrs", "commit": "c8bb9bfaa2843e7844b5bb13bed4370b51feec4f", "license": "MIT", "py_files": 56, "py_lines": 21026},
+    {"name": "httpie/cli", "url": "https://github.com/httpie/cli", "commit": "5b604c37c6c67e18e7c3e9aee6c88a8c22b98345", "license": "BSD-3-Clause", "py_files": 133, "py_lines": 19002}
+  ]
+}
