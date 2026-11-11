@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mini-copilot"
+version = "0.1.0"
+description = "Python code prediction with n-gram models and AST analysis"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "tree-sitter",
+  "tree-sitter-python",
+  "scikit-learn",
+  "numpy",
+  "pandas",
+  "pylint",
+  "radon",
+  "ruff",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[tool.setuptools.packages.find]
+include = ["mini_copilot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
