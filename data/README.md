@@ -1,10 +1,14 @@
 # Data
 
-`dataset.json` lists the 10 Python projects we train on, pinned to exact commits. See [docs/DATASET.md](../docs/DATASET.md) for why each was picked.
+`dataset.json` lists the 10 Python projects we train on, pinned to exact commits.
 
 ```
-python scripts/download_dataset.py   # fills data/raw/ with the .py files
-python scripts/make_splits.py        # writes data/processed/splits.json (70/30 + 5 folds)
+python3 scripts/download_dataset.py   # fills data/raw/ with the .py files
+python3 scripts/make_splits.py        # only if you need to rebuild the split
 ```
 
-`raw/` and `processed/` are git-ignored, so everyone regenerates them locally with the same seed.
+`raw/` is git-ignored: everyone downloads the same pinned commits.
+
+`processed/splits.json` is committed so the whole team uses the exact same
+train/test split and 5 folds. Don't regenerate and commit it unless the team
+agrees, because it changes everyone's results.
