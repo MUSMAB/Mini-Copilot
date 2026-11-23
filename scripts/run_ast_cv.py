@@ -1,9 +1,5 @@
-"""5-fold cross-validation for the AST model.
-
-Usage (from the repo root, after `pip install -e backend`):
-    python3 scripts/run_ast_cv.py
-Writes experiments/results/ast_cv.json.
-"""
+# Runs 5-fold cross-validation for the AST model and prints the mean and std of each metric.
+# Uses data/loader.py, evaluation/cross_validation.py and models/ast_model.py; saves experiments/results/ast_cv.json.
 
 from mini_copilot.data.loader import load_splits
 from mini_copilot.evaluation.cross_validation import run_cv

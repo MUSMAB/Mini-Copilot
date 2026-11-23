@@ -1,4 +1,5 @@
-"""Run 5-fold CV for every model and report mean and std for each metric."""
+# Runs 5-fold cross-validation for a model and saves the mean and std of top-1, top-5, edit distance and validity.
+# Uses data/loader.py, evaluation/simulate.py, evaluation/metrics.py and parsing/tolerant_parser.py; called by scripts/run_ast_cv.py.
 
 import json
 from statistics import mean, pstdev
@@ -11,11 +12,9 @@ from .simulate import make_samples
 RESULTS_DIR = DATA_DIR.parent / "experiments" / "results"
 
 
+# Trains a fresh model on 4 folds, tests on the 5th, repeats for every fold, and returns the summary.
+# model_factory is a function that returns an untrained model, and valid is the share of top suggestions that still parse.
 def run_cv(model_factory, folds: list[list[str]], max_samples: int = 20, save: bool = True) -> dict:
-    """Train a fresh model on 4 folds, test on the 5th, repeat for every fold.
-
-    model_factory is called with no arguments and returns an untrained Predictor.
-    """
     per_fold: dict[str, list[float]] = {"top1": [], "top5": [], "edit_distance": [], "valid": []}
     name = "model"
     for k in range(len(folds)):
@@ -36,7 +35,6 @@ def run_cv(model_factory, folds: list[list[str]], max_samples: int = 20, save: b
         per_fold["edit_distance"].append(
             mean(normalized_edit_distance(p[0] if p else "", t) for p, t in zip(predictions, targets))
         )
-        # Does the top suggestion, spliced in and with the missing syntax filled in, still parse?
         valid = [completes_to_valid_python(c, p[0]) for c, p in zip(contexts, predictions) if p]
         per_fold["valid"].append(mean(valid) if valid else 0.0)
         print(f"{name} fold {k}: " + "  ".join(f"{m}={v[-1]:.4f}" for m, v in per_fold.items()), flush=True)
