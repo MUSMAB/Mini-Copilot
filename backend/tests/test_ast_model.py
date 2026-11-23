@@ -1,0 +1,152 @@
+# Tests the AST model: keyword and name suggestions, half-typed words, strings and comments, retraining and junk input.
+# Covers models/ast_model.py and models/base.py.
+
+import pytest
+from mini_copilot.models.ast_model import ASTModel
+from mini_copilot.models.base import Predictor
+
+PROGRAM_A = '''\
+import os
+
+
+class Box:
+    def __init__(self, size):
+        self.size = size
+        self.label = "box"
+
+    def grow(self, amount):
+        if amount > 0:
+            self.size += amount
+        else:
+            self.size -= amount
+        return self.size
+
+
+def main():
+    try:
+        box = Box(3)
+        box.grow(2)
+    except ValueError:
+        print("bad")
+    for i in range(3):
+        print(i)
+'''
+
+PROGRAM_B = '''\
+from os import path
+
+
+def total(values):
+    count = 0
+    for value in values:
+        if value > 0:
+            count += value
+        else:
+            count -= value
+    return count
+
+
+def hello(name):
+    print("hello", name)
+
+
+def show(items):
+    for item in items:
+        print(item)
+    try:
+        print(total(items))
+    except TypeError:
+        print("not numbers")
+'''
+
+
+# Trains one model on the two sample programs and shares it with the tests in this file.
+# scope="module" makes pytest build it only once.
+@pytest.fixture(scope="module")
+def model():
+    m = ASTModel()
+    m.train([PROGRAM_A, PROGRAM_B] * 3)
+    return m
+
+
+# Checks that ASTModel is a Predictor named "ast".
+def test_is_a_predictor():
+    assert isinstance(ASTModel(), Predictor)
+    assert ASTModel().name == "ast"
+
+
+# Checks that predict returns at most k strings.
+def test_returns_at_most_k_strings(model):
+    for k in (1, 3, 5):
+        out = model.predict("def f(x):\n    ", k)
+        assert len(out) <= k and all(isinstance(w, str) for w in out)
+
+
+# Checks that else or elif is suggested at the start of a line after an if body.
+def test_else_follows_an_if_body(model):
+    source = "def f(x):\n    if x:\n        y = 1\n    "
+    assert {"else", "elif"} & set(model.predict(source, 3))
+
+
+# Checks that except is suggested at the start of a line after a try body.
+def test_except_follows_a_try_body(model):
+    assert "except" in model.predict("def f(x):\n    try:\n        y = 1\n    ", 3)
+
+
+# Checks that "in" is the top suggestion after a for-loop variable.
+def test_for_target_is_followed_by_in(model):
+    assert model.predict("for y ", 1) == ["in"]
+
+
+# Checks that "import" is the top suggestion after "from" and a module name.
+def test_from_module_is_followed_by_import(model):
+    assert model.predict("from os ", 1) == ["import"]
+
+
+# Checks that "(" is the top suggestion after a function name like print.
+def test_call_paren_after_function_name(model):
+    assert model.predict("def f(x):\n    print", 1) == ["("]
+
+
+# Checks that a parameter defined earlier in the file is suggested.
+def test_suggests_names_from_the_current_file(model):
+    source = "def scale(readings, factor):\n    return readings * "
+    assert "factor" in model.predict(source, 5)
+
+
+# Checks that an attribute set earlier in the file is suggested after "self.".
+def test_attribute_after_dot_comes_from_the_file(model):
+    source = "class P:\n    def __init__(self):\n        self.weight = 1\n\n    def get(self):\n        return self."
+    assert "weight" in model.predict(source, 3)
+
+
+# Checks that a half-typed word like "pri" suggests "print".
+def test_finishes_a_half_typed_word(model):
+    assert "print" in model.predict("def f(x):\n    pri", 3)
+
+
+# Checks that a finished word like "print" is not replaced and "(" is suggested next.
+def test_complete_word_is_not_replaced(model):
+    assert model.predict("def f(x):\n    print", 1) == ["("]
+
+
+# Checks that nothing is suggested while the cursor is inside a string or comment.
+def test_nothing_is_suggested_inside_a_string_or_comment(model):
+    assert model.predict('x = "hello wor', 5) == []
+    assert model.predict("x = 1  # todo fi", 5) == []
+
+
+# Checks that training twice gives the same predictions as training once.
+def test_retraining_replaces_old_statistics():
+    m = ASTModel()
+    m.train([PROGRAM_A])
+    first = m.predict("def f(x):\n    if x:\n        y = 1\n    ", 5)
+    m.train([PROGRAM_A])
+    assert m.predict("def f(x):\n    if x:\n        y = 1\n    ", 5) == first
+
+
+# Checks that an untrained model returns an empty list and junk input does not raise.
+def test_untrained_model_and_junk_input_do_not_crash(model):
+    assert ASTModel().predict("x = ", 5) == []
+    for junk in ["", "   ", ")))((({{", "\x00", "def (:\n\t\t", "é = 1\nprint(é"]:
+        model.predict(junk, 5)
