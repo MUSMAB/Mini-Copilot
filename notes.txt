@@ -1,0 +1,880 @@
+MINI COPILOT NOTES
+============================================================================
+
+These are my notes for the Mini Copilot project. I wrote them so that
+someone with no background can read from top to bottom and understand what
+the project is, what has been built, how it is tested, and what the results
+mean. They are in first person because they are my record of the work.
+
+CONTENTS
+
+  PART 1. THE PROJECT
+    1.1 What the project is
+    1.2 A tiny example
+    1.3 Terms and what they stand for
+    1.4 The three models
+    1.5 What each part of the project does
+    1.6 How the parts connect
+    1.7 The big picture
+  PART 2. THE WORK SO FAR
+    2.1 What is done, in brief
+    2.2 What each finished file does and how it connects
+    2.3 Setting up and running everything
+    2.4 How the models are tested
+    2.5 Results for the AST model
+    2.6 Results for the base model (n gram)
+    2.7 Comparing the models
+  PART 3. STILL TO DO
+
+============================================================================
+PART 1. THE PROJECT
+============================================================================
+
+1.1 What the project is
+=======================
+
+Mini Copilot is a small coding assistant for Python. A student types code in
+an editor, and Mini Copilot suggests the next word they are likely to type.
+It works like the autocomplete on a phone keyboard or like GitHub Copilot,
+only much smaller. It is a final project for COSC 329, built with a team.
+
+The project has two sides:
+
+- Next word suggestions. This is the main part. Models learn from real
+  Python code and then guess what comes next.
+- Code analysis. This is the extra part. It will spot common beginner
+  mistakes and misconceptions in a student's code and suggest better
+  solutions. It is not built yet.
+
+The question behind the main part is this: does knowing the structure of the
+code help a model guess better than simply counting which words usually
+follow which? To find out, I build a simple counting model, build a model
+that understands code structure, and compare them fairly on the same data.
+
+1.2 A tiny example
+==================
+
+Say a student has typed this so far:
+
+    for i in
+
+My models have to guess the next word. A good answer is range, because for i
+in is very often followed by range in real programs. The models know this
+because, before anyone uses them, they read a lot of real Python code and
+notice patterns like this one. That reading step is called training.
+
+- The text typed so far (here, for i in) is called the context.
+- The word that really comes next in the real code is called the target.
+- What a model gives back is a ranked list of suggestions, best first. I
+  usually ask for 5. If range is first on the list, the model got it right
+  on the first try.
+
+1.3 Terms and what they stand for
+=================================
+
+THE TASK
+
+- Python: the programming language this project works on.
+- Source code: the text of a program. A file ending in .py holds Python
+  source code.
+- Editor: the program where the student types code. Mine will be a web page.
+  It is not built yet.
+- Token: the smallest meaningful piece of code. A name like count, a keyword
+  like for, a number like 3, a string like hello in quotes, an operator like
+  ==, or a bracket.
+- Keyword: a word with a special meaning in Python, such as def, if, for,
+  return and import.
+- Word: in these notes, a token the student could type next. Every
+  suggestion is exactly one word.
+- Context: all the code typed so far. It is the only thing a model sees when
+  it has to guess.
+- Target: the word that really comes next. It is the right answer that I
+  check a model against.
+- Suggestion or prediction: what a model returns. It is a ranked list of up
+  to k words, best first. I use k equal to 5.
+- Half typed word: the code ends in the middle of a word, like pri when the
+  student is about to finish print.
+- Syntax: the grammar rules of a language. Code that follows them is valid.
+  Code that breaks them is broken. Code that is still being typed is almost
+  always broken for a moment.
+- Indentation: the spaces at the start of a line. Python uses them to show
+  which lines belong inside something, like the body of a function.
+- Block: the group of indented lines under a line that ends in a colon, such
+  as the lines inside an if.
+- F string: a string with an f in front that can hold variables in curly
+  brackets, like f followed by a quoted hello and a name in curly brackets.
+
+LEARNING
+
+- Model: a program that makes guesses from patterns it learned. Mine take a
+  context and return suggestions.
+- Training: the model reads the training files and records patterns, mostly
+  by counting.
+- Training files and test files: the model learns from the training files
+  and is only scored on test files it has never seen. Scoring on files it
+  has seen would be like handing a student the answers.
+- Count table: a table that stores how many times each word followed each
+  context in the training files. Both of my models are built from count
+  tables.
+- Baseline: a simple model that smarter models are compared against. If a
+  clever model cannot beat the baseline, the cleverness did not help.
+- Score: a number saying how likely a suggestion is. Higher means more
+  likely. I sort suggestions by score.
+- Smoothing: a way to give a sensible score to something the model never saw
+  in training. Without it, every unseen pattern would score zero and the
+  model would have nothing to say.
+- Backoff: when a long context was never seen, fall back to a shorter piece
+  of it that was.
+
+THE MODELS
+
+- N gram: a pattern of n tokens in a row. The model looks at the last n
+  minus 1 tokens and guesses token number n.
+- Order: the n in n gram. A larger n means the model looks at more of the
+  code before the cursor.
+- Unigram, bigram, trigram: n gram models with n equal to 1, 2 and 3. A
+  unigram looks at no context at all and just knows which words are common.
+- Word level and char level: a word level model treats each token as one
+  unit. A char level model treats each single character as one unit and has
+  to spell out words itself.
+- Line start token: my special token for the start of a line. It holds the
+  newline plus that line's indentation, so the model can tell how deep in
+  the code it is.
+- Start marker: a special token I put in front of every file so the
+  beginning of a file is a context too.
+- Beam search: a way to build a word one character at a time while only
+  keeping the few most promising partial words at each step. The char level
+  model uses it.
+- AST: abstract syntax tree. A tree that shows how code is built from
+  statements and expressions, like a sentence diagram for code.
+- Parse and parser: to parse code is to read it and work out its structure.
+  A parser is the program that does it.
+- Tree sitter: the parsing library I use to build the AST. It keeps working
+  on broken or half typed code and marks the broken part as an error.
+- Tolerant parser: my name for parsing/tolerant_parser.py, which repairs
+  half typed code before parsing it.
+- Witten Bell: the smoothing method the AST model uses to blend specific and
+  general counts.
+- Hybrid: the planned third model that combines the n gram model and the AST
+  model.
+
+SCORING
+
+- Sample: one test question, made of a context and its target.
+- Top1: the share of samples where the first suggestion is the target.
+  Higher is better.
+- Top5: the share of samples where the target is anywhere in the 5
+  suggestions. Higher is better.
+- Edit distance: how different the first suggestion is from the target,
+  counted in single character changes and scaled from 0 (identical) to 1
+  (nothing in common). Lower is better. The full name is normalized
+  Levenshtein distance.
+- Valid: the share of first suggestions where the typed code plus the
+  suggestion, with missing syntax filled in, still parses with Python's own
+  parser. Higher is better.
+- Fold: one of 5 equal groups of files.
+- Cross validation: for each fold, train on the other 4 and test on that
+  one, then average the 5 scores. It uses all the data while never testing
+  on files a model trained on.
+- Mean and spread: the mean is the average of the 5 fold scores. The spread
+  is their standard deviation, so a small spread means the folds agreed.
+- Seed: a fixed number that makes random choices repeatable, so everyone
+  gets the same split and the same samples.
+
+SHORT FORMS AND TOOLS
+
+- AST: abstract syntax tree (see above).
+- API: application programming interface. The doorway the editor uses to ask
+  the backend for suggestions.
+- CV: cross validation (see above).
+- COSC 329: the course this project is for.
+- JSON: a plain text file format for saving structured data. My results are
+  saved as JSON.
+- GB: gigabyte, a unit of memory.
+- pytest: a tool that runs the project's automatic checks, called tests.
+- FastAPI: the web framework the API will be built with.
+- Pylint, Ruff, Radon: existing tools that check Python code for style
+  problems, mistakes and complexity. The analysis part will wrap them.
+- Big O: a way to describe how the running time of code grows as its input
+  grows, like O of n squared for two nested loops.
+
+1.4 The three models
+====================
+
+All three models follow the same rules, written in models/base.py. Each has
+a train method, which learns from a list of Python files given as text, and
+a predict method, which takes the context and returns the k best next words.
+Because they share this shape, one evaluation script can score any of them,
+and the editor can swap between them.
+
+MODEL 1: THE BASE MODEL (N GRAM)  [BUILT]
+
+The idea: count. Look at the last few words before the cursor and suggest
+the words that most often came next after the same few words in the training
+code. It knows nothing about Python structure, which makes it a fair
+baseline.
+
+A toy example with made up numbers. Say that in the training code, the words
+for i in were followed by range 9 times and by enumerate 1 time. The count
+table then holds those two numbers for that context, so range is the top
+suggestion and enumerate is the second.
+
+- Word level tokens. I split the code with Python's own tokenizer. Comments
+  and blank lines are dropped. An f string stays one token so it matches
+  what the test sample maker expects. The start of every line becomes one
+  line start token, so the model can learn things like else sitting one
+  indent level lower than the line before it. A start marker goes in front
+  of every file.
+- Char level tokens. Every single character is a token, spaces and newlines
+  included.
+- Count. For every position in every training file, and for every context
+  length from 0 up to n minus 1, I count which token came next. Keeping the
+  shorter contexts is what makes backing off possible.
+- Smooth. Long contexts are often never seen in training, so smoothing is
+  needed. I built two kinds. With add k, I start from the plain word counts
+  with k added to every word, then for each longer context I pretend I saw k
+  extra examples spread the way the next shorter context guesses. A context
+  seen many times trusts itself, and a context seen once leans on the
+  shorter one. With backoff, I use the longest context that has the word,
+  and every step down to a shorter context multiplies the score by 0.4.
+- Stay fast. If a context was followed by more than 50 different tokens, I
+  only score its 50 most common ones.
+- Word level extras. Line start tokens are used as context but never
+  suggested. Scores are scaled to add up to 1. A half typed word gets the
+  same 20 percent and 60 percent mixing as the AST model, so the comparison
+  between the two is fair.
+- Char level suggestions. The char model builds each suggestion one
+  character at a time. It keeps the 12 most likely partial words, adds one
+  more character to each, and ends a word when it is finished. A word is
+  finished when a run of letters, digits and underscores ends, when a string
+  reaches its closing quote, or when an operator is complete (so == stays
+  together and a bracket is its own word). The score of a word adds up every
+  way of writing it. If the code ends mid word, like pri, the model can grow
+  it into print or decide the word is done and suggest what comes next, so
+  it needs no extra rule for half typed words.
+
+Settings: n is the order, level is word or char, smoothing is add k or
+backoff, and k is the add k amount (default 1.0). There are also backoff
+(the penalty per step down, default 0.4), max_next (default 50), beam
+(default 12) and max_steps (default 30). The model's name is built from the
+level, the order and the smoothing, and cross validation uses it for the
+results file name, so different settings never overwrite each other.
+
+MODEL 2: THE AST MODEL  [BUILT]
+
+The idea: look at the structure. Instead of the last few words, it asks what
+slot of the code the cursor is in. For example, right after the loop
+variable of a for statement, the slot is waiting for the word in. It does
+not matter which variable name was used. The model learned from the training
+code that this slot is almost always followed by in.
+
+- Repair. Typed code is almost always broken because the student is in the
+  middle of a thought. The tolerant parser adds just enough fake code to
+  close open brackets, fill a missing operand with a placeholder, and add
+  pass for a missing block body. Then tree sitter parses it. I keep only the
+  tokens that were really typed and throw away the fake ones.
+- Describe each token. I store each token with the types of its parent nodes
+  in the tree (up to 4 levels), the statements it sits inside, how many
+  brackets are open, and its role in its parent.
+- Label the next token. Keywords and punctuation keep their text, like if,
+  for, ( and the colon. Every name becomes one label called name, every
+  number becomes number, and every string becomes string. This lets the
+  model learn that a name follows def without caring which name.
+- Build context keys. For the token before the cursor I make a list of keys
+  from the most specific to the most general, such as what the token is plus
+  its parents, then just what it is. There are three kinds. L means I am
+  inside a line. B means I am on the first line of a new block. N means I am
+  at the start of a line that lines up with an earlier statement, and that
+  is how the model knows else or elif can follow an if body.
+- Count. In training I count, for every key, which label came next. Names
+  are also counted by their text, and names seen fewer than 2 times are
+  dropped.
+- Blend. When predicting I look up every key and blend the counts from the
+  general keys up to the specific ones. I use Witten Bell weighting: a key
+  that has seen many different next tokens leans more on the looser keys.
+  This is the smoothing for this model.
+- Pick names. When the model expects a name, its probability is split
+  between names already used in this file (60 percent) and names seen in
+  training. Names in the file count more if they are recent (the weight
+  halves every 80 tokens) or if they followed the same kind of token before.
+  After a dot, only attribute names count.
+- Half typed words. If the code ends in a word, that word may be unfinished,
+  so I mix in words that would finish it. The unfinished share is 20 percent
+  if the word is known or already in the file and 60 percent if not.
+- Strings and comments. If the cursor is inside an open string or comment,
+  the model suggests nothing.
+
+MODEL 3: THE HYBRID MODEL  [NOT BUILT YET]
+
+The idea: use both. Take the suggestions of the best n gram model and re
+rank or filter them using what the AST model knows about the slot the cursor
+is in. The hope is to keep the n gram model's good first guesses while
+gaining the AST model's feel for valid syntax.
+
+1.5 What each part of the project does
+======================================
+
+- data/ and scripts/: where the training code comes from and how it is split
+  into folds. Also the runnable programs.
+- backend/mini_copilot/data/: reads files and folds from data/.
+- backend/mini_copilot/parsing/: turns code text into tokens (tokenizer.py)
+  and repairs and parses half typed code (tolerant_parser.py).
+- backend/mini_copilot/models/: the predictors. base.py is the shared shape,
+  ngram.py and ast_model.py are the two built models, hybrid.py is a stub.
+- backend/mini_copilot/evaluation/: makes test questions (simulate.py),
+  scores answers (metrics.py), and runs the whole cross validation
+  (cross_validation.py).
+- backend/mini_copilot/analysis/: the future misconception finder. Mostly
+  stubs.
+- backend/mini_copilot/api/: the future web server the editor will call.
+  Currently a stub.
+- backend/tests/: automatic checks that keep the code honest.
+- experiments/results/: where cross validation summaries are saved.
+- frontend/: the future editor page. Nothing is built yet.
+- notes.txt: this file.
+
+1.6 How the parts connect
+=========================
+
+The picture below follows the data from the internet all the way to a score.
+Read it from top to bottom.
+
+  10 real Python projects (listed in data/dataset.json)
+          |  scripts/download_dataset.py
+          v
+  data/raw/  (the downloaded .py files)
+          |  scripts/make_splits.py
+          v
+  data/processed/splits.json  (which file is in which of 5 folds)
+          |  read by data/loader.py
+          v
+  evaluation/cross_validation.py  (runs one model through 5 folds)
+      |                |                    |
+      | train          | test questions     | scoring
+      v                v                    v
+    a model         simulate.py          metrics.py and the valid
+                                         check in tolerant_parser.py
+
+And the two models, with the pieces each one is built on:
+
+  models/base.py  (the shared shape: train and predict)
+      ^                                  ^
+      |  built on                        |  built on
+      |                                  |
+  models/ngram.py                  models/ast_model.py
+      |  uses                            |  uses
+      v                                  v
+  parsing/tokenizer.py             parsing/tolerant_parser.py
+                                   (which uses tree sitter)
+
+- scripts/run_ast_cv.py and scripts/run_ngram_cv.py are the two buttons I
+  press. Each hands one model to run_cv in cross_validation.py.
+- run_cv trains a fresh copy of the model on 4 folds, asks simulate.py for
+  test questions from the 5th fold, collects the model's answers, and has
+  metrics.py and tolerant_parser.py score them.
+- Because both models go through exactly the same steps, their numbers can
+  be compared directly.
+
+1.7 The big picture
+===================
+
+- Goal: a Python autocomplete that learns from real code, plus a helper that
+  spots beginner misconceptions.
+- Step 1, build a plain counting model (the base model) and measure it. That
+  gives a baseline score. Done.
+- Step 2, build a model that understands code structure (the AST model) and
+  measure it the same way. Done.
+- Step 3, combine them (the hybrid model) and see if the combination beats
+  both. Not started.
+- Step 4, put the best model behind a web API and an editor page so a
+  student can actually use it. Not started.
+- Step 5, build the analysis part that points out misconceptions and
+  suggests better solutions. Not started.
+- Step 6, run the full set of experiments and write up what I found. Not
+  started.
+
+============================================================================
+PART 2. THE WORK SO FAR
+============================================================================
+
+2.1 What is done, in brief
+==========================
+
+- Dataset: 10 real Python projects pinned to exact versions, a download
+  script, and a committed split into 5 folds.
+- Parsing: a tokenizer for the n gram model and a tolerant parser that reads
+  half typed code for the AST model.
+- Evaluation: a test question maker, the four metrics, and a cross
+  validation runner.
+- Base model: the n gram model at word level and char level, with two
+  smoothing methods.
+- AST model: the structure aware model built on tree sitter.
+- Run scripts: one for each model.
+- Tests: automatic checks for every finished module.
+- Results: full 5 fold numbers for the AST model and for the n gram model at
+  many settings (section 2.5 and 2.6).
+
+2.2 What each finished file does and how it connects
+====================================================
+
+DATA AND SCRIPTS
+
+- data/dataset.json: the list of the 10 projects and the exact commit of
+  each. Read by scripts/download_dataset.py.
+- scripts/download_dataset.py: downloads each project at its pinned commit
+  and keeps only the .py files, into data/raw. That folder is ignored by
+  git, so everyone downloads their own identical copy.
+- scripts/make_splits.py: skips empty files and files Python cannot parse,
+  shuffles with a fixed seed, keeps at most 300 files per project, and
+  writes data/processed/splits.json.
+- data/processed/splits.json: the list of which file belongs to which of the
+  5 folds (and a 70 percent train, 30 percent test split). It is committed
+  so the whole team uses the same folds. Right now it holds 1075 files,
+  about 215 per fold.
+- data/README.md: short instructions for the data steps above.
+- scripts/run_ast_cv.py: runs cross validation for the AST model. Uses
+  loader.py, cross_validation.py and ast_model.py.
+- scripts/run_ngram_cv.py: runs cross validation for one n gram model. It
+  takes options for the order, level, smoothing and k. Uses loader.py,
+  cross_validation.py and ngram.py.
+
+BACKEND/MINI_COPILOT/DATA AND PARSING
+
+- data/loader.py: load_splits reads splits.json, read_source reads one file
+  from data/raw, and fold_split returns the training files and the test
+  files for a chosen fold. Used by cross_validation.py and both run scripts.
+- parsing/tokenizer.py: word_tokens turns code into the list of tokens the n
+  gram model counts (with line start tokens and whole f strings), and
+  char_tokens turns it into characters. Used by ngram.py.
+- parsing/tolerant_parser.py: repairs half typed code and parses it with
+  tree sitter, returning each typed token with its surroundings. It also has
+  is_valid_python and completes_to_valid_python, which the valid score uses.
+  Used by ast_model.py and cross_validation.py.
+
+BACKEND/MINI_COPILOT/MODELS
+
+- models/base.py: defines Predictor, the shape every model must have (a
+  name, train and predict). Used by ngram.py, ast_model.py and hybrid.py.
+- models/ngram.py: the base model. Counts what follows each context at word
+  or char level. Built on base.py and uses tokenizer.py. Run by
+  cross_validation.py through run_ngram_cv.py.
+- models/ast_model.py: the AST model. Counts what follows each syntax slot.
+  Built on base.py and uses tolerant_parser.py. Run by cross_validation.py
+  through run_ast_cv.py.
+
+BACKEND/MINI_COPILOT/EVALUATION
+
+- evaluation/simulate.py: make_samples pretends to type. It cuts a file
+  right before a random token. The text before the cut is the context and
+  the token after it is the target. Newlines, indentation and comments are
+  never targets, an f string counts as one word, and the seed (plus the file
+  length) makes the picks repeatable, so every model gets identical
+  questions. Used by cross_validation.py.
+- evaluation/metrics.py: computes top1, top5 and the normalized edit
+  distance. Used by cross_validation.py.
+- evaluation/cross_validation.py: run_cv is the engine. For each fold it
+  trains a fresh model, builds up to 20 test samples per test file, asks the
+  model for its top 5, computes the four scores, prints the fold, and at the
+  end saves the mean, spread and per fold numbers as JSON in
+  experiments/results.
+
+BACKEND/TESTS
+
+- test_ast_model.py checks the AST model, for example that else is suggested
+  after an if body.
+- test_tolerant_parser.py checks the code repair, token context and validity
+  checks.
+- test_ngram.py checks the n gram model at both levels and with both
+  smoothings.
+- test_tokenizer.py checks the tokenizer rules.
+- test_simulate.py checks the test question maker.
+- test_metrics.py checks the metric formulas.
+- test_patterns.py checks one finished helper in the analysis part,
+  count_if_chain.
+
+2.3 Setting up and running everything
+=====================================
+
+These steps are for a fresh computer. I tested the install and test steps in
+a clean environment, and the run steps on my own machine. In this file I
+write command options in words, because I keep the dash symbol only for
+bullet points.
+
+Step 1. Install what you need.
+
+- Python 3.10 or newer, and git (the download script uses it).
+- Make a virtual environment for the project and switch it on. Python's
+  built in venv tool does this. It is run as python3, then a dash and the
+  letter m, then venv and a folder name. The folder names venv and env are
+  already ignored by git.
+- Install the packages with this command:
+
+    pip install tree_sitter tree_sitter_python pytest
+
+Step 2. Download the data once. It needs internet.
+
+    python3 scripts/download_dataset.py
+
+It fills data/raw. The folds file is already in the repo, so I do not need
+to run make_splits.py.
+
+Step 3. Run the automatic tests. On a Mac or Linux, from the top folder of
+the repo:
+
+    cd backend
+    PYTHONPATH=. pytest
+
+On Windows PowerShell I set the variable first with $env:PYTHONPATH = "."
+and then run pytest. Success looks like a line ending in passed (right now
+76 passed).
+
+Step 4. Run the AST cross validation. From the top folder of the repo:
+
+    PYTHONPATH=backend python3 scripts/run_ast_cv.py
+
+On Windows PowerShell I set $env:PYTHONPATH = "backend" first and use python
+instead of python3. It takes about 2 minutes on my laptop and prints one
+line per fold and then the summary.
+
+Step 5. Run the n gram cross validation. From the top folder of the repo:
+
+    PYTHONPATH=backend python3 scripts/run_ngram_cv.py
+
+With no options this runs the default model: word level, order 3, add k
+smoothing, k equal to 1.0. This reproduces the default row in section 2.6
+and takes about a minute and a half.
+
+To run another setting, add options after the file name. The options are n,
+level, smoothing and k. Each is typed with two dashes in front of its name
+and a space and the value after it. level takes word or char. smoothing
+takes backoff, or add k typed with a dash between add and k. For example, to
+reproduce the char level order 5 row, give level the value char and n the
+value 5. Typing the two dashes and the word help after the file name lists
+all options.
+
+Each cross validation run saves its summary as a JSON file in
+experiments/results, named after the model, so different runs do not
+overwrite each other. Running the same command again gives the same numbers,
+because every random choice uses a fixed seed. I checked this by running the
+AST model twice.
+
+2.4 How the models are tested
+=============================
+
+I test in two different ways, and they answer different questions.
+
+TEST 1. DOES THE CODE WORK? (AUTOMATIC TESTS)
+
+These are small checks written with pytest. Each one feeds a model a tiny
+piece of code and checks an obvious answer, for example that an AST model
+suggests else right after an if body, or that a model never crashes on junk
+input. They run in under a second and they tell me when a change breaks
+something. They do not say how good the suggestions are on real code.
+
+TEST 2. HOW GOOD ARE THE SUGGESTIONS? (CROSS VALIDATION)
+
+This is the real measurement. It works like this:
+
+- The files from the 10 projects are already split into 5 folds.
+- For fold 0: train a fresh model on folds 1 to 4. Then take the files in
+  fold 0, which the model has never seen, and cut each one at up to 20
+  random places. Each cut gives a context and a target. That is about 4,200
+  test questions per fold, and 21,094 over all 5 folds.
+- Ask the model for its top 5 suggestions for every question.
+- Score the answers with the four metrics: top1, top5, edit distance and
+  valid.
+- Repeat for folds 1 to 4, each time training a fresh model and testing on
+  the held out fold.
+- Report the mean of the 5 fold scores and their spread.
+
+Every model gets exactly the same files, the same folds, the same questions
+and the same four scores, so the numbers can be compared fairly. Here is
+what the four scores mean in practice:
+
+- top1: how often the first suggestion was exactly right.
+- top5: how often the right word was somewhere in the list of 5.
+- edit distance: how far off the first suggestion was when it was wrong. It
+  counts single character changes, so print versus prnt is small and print
+  versus range is large.
+- valid: how often the first suggestion keeps the code legal. I add the
+  suggestion to the typed code, fill in any missing syntax, and ask Python's
+  own parser whether it accepts the result. Only questions where the model
+  gave a suggestion count.
+
+What the test questions look like. I counted the kind of word the target is
+in all 21,094 questions:
+
+- Brackets, commas, dots, colons and operators: 9,987 (47.3 percent).
+- Names (variables, functions, attributes): 6,965 (33.0 percent).
+- Keywords like def, if and return: 2,146 (10.2 percent).
+- Strings: 1,234 (5.9 percent).
+- Numbers: 762 (3.6 percent).
+
+So more than half of all questions ask for a small structural word, which is
+why the models can reach a top1 near 0.4 without being good at guessing
+names. I counted these with a short throwaway script, not one of the project
+files.
+
+The run prints one line per fold, in this form:
+
+    ast fold 0: top1=0.3622  top5=0.6594  edit_distance=0.6030  valid=0.9713
+
+and at the end a summary with the mean and the spread:
+
+    top1           0.3681 ± 0.0047
+    top5           0.6590 ± 0.0064
+    edit_distance  0.5966 ± 0.0046
+    valid          0.9708 ± 0.0029
+
+2.5 Results for the AST model
+=============================
+
+How it was produced: the command in step 4 of section 2.3, which runs cross
+validation on the AST model with its default settings (20 samples per test
+file, top 5 suggestions). In the per fold table, each row is the score on
+one fold when the model was trained on the other four. The meaning of each
+column is in section 2.4.
+
+PER FOLD SCORES
+
+    fold      top1      top5      edit distance   valid
+    fold 0    0.3622    0.6594    0.6030          0.9713
+    fold 1    0.3723    0.6583    0.5912          0.9735
+    fold 2    0.3655    0.6525    0.5995          0.9691
+    fold 3    0.3749    0.6706    0.5916          0.9739
+    fold 4    0.3656    0.6541    0.5975          0.9662
+
+MEAN AND SPREAD OVER THE 5 FOLDS
+
+    top1           0.3681 ± 0.0047
+    top5           0.6590 ± 0.0064
+    edit distance  0.5966 ± 0.0046
+    valid          0.9708 ± 0.0029
+
+WHAT THESE NUMBERS MEAN
+
+- top1 0.3681: in about 37 of every 100 questions, the first suggestion was
+  exactly the next word.
+- top5 0.6590: in about 66 of every 100 questions, the right word was
+  somewhere in the 5 suggestions.
+- edit distance 0.5966: on average about 60 percent of the characters would
+  have to change to turn the first suggestion into the target. Right answers
+  count as 0, so the misses must average about 0.94. That means a wrong
+  first suggestion is usually a completely different word, not a near miss.
+- valid 0.9708: about 97 of every 100 first suggestions kept the code legal.
+  This is the AST model's strongest result.
+- spread: the spread of top1 is only 0.0047, so all 5 folds agree closely.
+  The score is not a lucky fold.
+
+2.6 Results for the base model (n gram)
+=======================================
+
+How these were produced: each row is one run of scripts/run_ngram_cv.py
+(section 2.3, step 5) with the setting named in the row, using the same
+folds and the same questions as the AST model. The tables show the mean and
+the spread over the 5 folds, written as mean plus or minus spread. For top1,
+top5 and valid a higher number is better. For edit distance a lower number
+is better. The meaning of each column is in section 2.4.
+
+THE DEFAULT MODEL: WORD LEVEL, ORDER 3, ADD K, K 1.0
+
+This is what step 5 of section 2.3 produces with no options. It is also the
+order 3 row of the order sweep below.
+
+    fold      top1      top5      edit distance   valid
+    fold 0    0.3848    0.6306    0.5770          0.9204
+    fold 1    0.3677    0.6229    0.5967          0.9207
+    fold 2    0.3837    0.6321    0.5789          0.9145
+    fold 3    0.3908    0.6384    0.5737          0.9101
+    fold 4    0.3826    0.6311    0.5771          0.9170
+
+    top1           0.3819 ± 0.0076
+    top5           0.6310 ± 0.0049
+    edit distance  0.5807 ± 0.0082
+    valid          0.9165 ± 0.0039
+
+WHAT CHANGING THE ORDER N DOES (WORD LEVEL, ADD K)
+
+n    top1              top5              edit distance     valid
+1    0.0697 ± 0.0046   0.3444 ± 0.0111   0.9302 ± 0.0045   0.3403 ± 0.0105
+2    0.2554 ± 0.0071   0.5395 ± 0.0068   0.7131 ± 0.0060   0.8709 ± 0.0027
+3    0.3819 ± 0.0076   0.6310 ± 0.0049   0.5807 ± 0.0082   0.9165 ± 0.0039
+4    0.4150 ± 0.0079   0.6436 ± 0.0055   0.5478 ± 0.0081   0.9247 ± 0.0035
+5    0.4305 ± 0.0065   0.6511 ± 0.0050   0.5312 ± 0.0069   0.9260 ± 0.0031
+6    0.4355 ± 0.0079   0.6524 ± 0.0051   0.5253 ± 0.0080   0.9262 ± 0.0027
+7    0.4403 ± 0.0075   0.6546 ± 0.0046   0.5205 ± 0.0073   0.9261 ± 0.0027
+8    0.4415 ± 0.0072   0.6549 ± 0.0046   0.5191 ± 0.0073   0.9263 ± 0.0026
+9    0.4423 ± 0.0078   0.6551 ± 0.0043   0.5182 ± 0.0077   0.9265 ± 0.0025
+10   0.4425 ± 0.0076   0.6551 ± 0.0043   0.5180 ± 0.0075   0.9264 ± 0.0027
+
+THE SAME SWEEP WITH BACKOFF SMOOTHING (WORD LEVEL)
+
+n    top1              top5              edit distance     valid
+1    0.0697 ± 0.0046   0.3444 ± 0.0111   0.9302 ± 0.0045   0.3403 ± 0.0105
+2    0.2544 ± 0.0080   0.5228 ± 0.0100   0.7212 ± 0.0084   0.8026 ± 0.0063
+3    0.3804 ± 0.0085   0.6244 ± 0.0058   0.5823 ± 0.0086   0.9069 ± 0.0043
+4    0.4123 ± 0.0097   0.6358 ± 0.0051   0.5502 ± 0.0100   0.9167 ± 0.0032
+5    0.4276 ± 0.0075   0.6441 ± 0.0052   0.5340 ± 0.0078   0.9182 ± 0.0034
+6    0.4318 ± 0.0087   0.6457 ± 0.0050   0.5289 ± 0.0087   0.9188 ± 0.0031
+7    0.4368 ± 0.0081   0.6480 ± 0.0050   0.5235 ± 0.0077   0.9186 ± 0.0033
+8    0.4379 ± 0.0075   0.6483 ± 0.0047   0.5220 ± 0.0074   0.9189 ± 0.0032
+9    0.4387 ± 0.0080   0.6484 ± 0.0046   0.5215 ± 0.0079   0.9190 ± 0.0031
+10   0.4389 ± 0.0079   0.6484 ± 0.0046   0.5212 ± 0.0078   0.9190 ± 0.0032
+
+CHAR LEVEL RESULTS
+
+For the char level, order 5 means the model looks at the last 4 characters.
+Smoothing is add k with k 1.0 unless the row says backoff.
+
+smoothing n  top1            top5            edit distance   valid
+add k     3  0.1768 ± 0.0052 0.3861 ± 0.0067 0.8084 ± 0.0048 0.6590 ± 0.0085
+add k     5  0.2760 ± 0.0048 0.5106 ± 0.0065 0.6901 ± 0.0038 0.8113 ± 0.0073
+add k     7  0.3469 ± 0.0038 0.5621 ± 0.0066 0.6133 ± 0.0045 0.8475 ± 0.0046
+add k     10 0.3952 ± 0.0056 0.5912 ± 0.0059 0.5665 ± 0.0050 0.8669 ± 0.0035
+backoff   5  0.2753 ± 0.0047 0.5089 ± 0.0059 0.6912 ± 0.0036 0.8103 ± 0.0067
+backoff   10 0.3947 ± 0.0054 0.6013 ± 0.0042 0.5687 ± 0.0054 0.8721 ± 0.0040
+
+PICTURE: TOP1 AS THE ORDER GROWS (WORD LEVEL, ADD K)
+
+    n 1  #### 0.070
+    n 2  ############### 0.255
+    n 3  ####################### 0.382
+    n 4  ######################### 0.415
+    n 5  ########################## 0.431
+    n 6  ########################## 0.435
+    n 7  ########################## 0.440
+    n 8  ########################## 0.441
+    n 9  ########################### 0.442
+    n 10 ########################### 0.442
+
+PICTURE: TOP5 AS THE ORDER GROWS (WORD LEVEL, ADD K)
+
+    n 1  ################## 0.344
+    n 2  ############################ 0.540
+    n 3  ################################# 0.631
+    n 4  ################################## 0.644
+    n 5  ################################## 0.651
+    n 6  ################################## 0.652
+    n 7  ################################## 0.655
+    n 8  ################################## 0.655
+    n 9  ################################## 0.655
+    n 10 ################################## 0.655
+
+WHAT I NOTICE
+
+- The big jump is from n 1 to n 3. Top1 goes from 0.0697 to 0.3819. A
+  unigram has no context, so it keeps suggesting the same common words
+  whatever is typed. The last two words are already enough to fix most of
+  that.
+- After n 4 the gains are small. From n 4 to n 10, top1 only goes from
+  0.4150 to 0.4425 and top5 from 0.6436 to 0.6551, while the model needs
+  much more memory (see the cost list below).
+- Add k beats backoff on top1 at every order from 2 to 10, but the gaps in
+  top1 are small (at most 0.0037). The gap in valid is bigger: at n 2 it is
+  0.0683, and at n 3 it is 0.0096. At n 1 the two are identical because with
+  no context there is nothing to back off from.
+- At word level, valid stops improving at about 0.926 from n 5 upward, well
+  below the AST model's 0.971. Looking further back at the same kind of
+  counts does not seem to teach the n gram model the grammar. That is the
+  gap the hybrid model should try to close.
+- Word level versus char level: at order 5, the word model's top1 is 0.4305
+  and the char model's is 0.2760. At order 10 they are 0.4425 for words and
+  0.3952 for chars. For the same order a char model sees far less history
+  than a word model, because one word is many characters.
+- At char level the two smoothing methods are close, and the winner depends
+  on the order. At order 10, top1 is level (0.3952 for add k, 0.3947 for
+  backoff) but backoff is ahead on top5 (0.6013 against 0.5912) and valid
+  (0.8721 against 0.8669). At order 5, add k is very slightly ahead on every
+  score.
+- The best top1 in my sweep is word level, order 10, add k, at 0.4425. That
+  is above the AST model's 0.3681. Its top5 (0.6551) is below the AST
+  model's 0.6590, and its valid (0.9264) is below the AST model's 0.9708.
+
+WHAT THE N GRAM MODELS COST ON MY LAPTOP
+
+- Memory: a word level order 10 model needs about 1.5 GB, and a char level
+  order 10 model about 1.6 GB. Low orders need far less.
+- Time for a full 5 fold run: the word level runs take about a minute and a
+  half each (73 seconds for order 3 and 101 seconds for order 10). The char
+  level is slower because every suggestion is built character by character:
+  roughly 8 minutes for order 5, and about 13 minutes for order 10 with add
+  k.
+- The AST model takes about 2 minutes for a full run. All times are from my
+  laptop with nothing else running. The order 10 char time is an estimate
+  from timing one fold and multiplying by 5. The others were timed from
+  start to finish.
+
+2.7 Comparing the models
+========================
+
+Same files, same folds, same questions, same four scores. The table shows
+the mean over the 5 folds.
+
+model                               top1      top5      edit dist  valid
+AST model                           0.3681    0.6590    0.5966     0.9708
+n gram, word, order 3 (default)     0.3819    0.6310    0.5807     0.9165
+n gram, word, order 10, add k       0.4425    0.6551    0.5180     0.9264
+char, order 10, add k               0.3952    0.5912    0.5665     0.8669
+
+The best row in each column:
+
+- top1: n gram, word, order 10, add k (0.4425)
+- top5: AST model (0.6590)
+- edit distance: n gram, word, order 10, add k (0.5180)
+- valid: AST model (0.9708)
+
+Picture: top1 and top5 side by side (a longer bar is better).
+
+AST model
+  top1 ##################### 0.368
+  top5 ###################################### 0.659
+n gram, word, order 3 (default)
+  top1 ###################### 0.382
+  top5 #################################### 0.631
+n gram, word, order 10, add k
+  top1 ######################### 0.442
+  top5 ##################################### 0.655
+char, order 10, add k
+  top1 ####################### 0.395
+  top5 ################################## 0.591
+
+WHAT I TAKE FROM THIS
+
+- The AST model and the n gram models are good at different things. The word
+  n gram models, from order 3 up, get the first guess right more often than
+  the AST model. The AST model has a slightly better top5 and a much better
+  valid score.
+- Valid is where the structure helps most. The AST model keeps the code
+  legal for about 97 of every 100 first suggestions, against about 93 for
+  the best n gram model.
+- On top5 the models are close. The AST model is ahead of every n gram
+  setting I ran, but its lead over the best one is only 0.0039, so no model
+  is far ahead at getting the right word somewhere in the list.
+- This is the case for the hybrid model: keep the n gram model's strong
+  first guesses and use the AST model's knowledge of structure to keep the
+  suggestions legal.
+- A caution about reading the numbers: the test cuts are random, so many
+  targets are small easy words. As section 2.4 shows, more than half of the
+  targets are brackets, commas, operators and keywords. A top1 of 0.4 does
+  not mean the models guess names 40 percent of the time.
+
+============================================================================
+PART 3. STILL TO DO
+============================================================================
+
+- Hybrid model (models/hybrid.py): take the best n gram model and re rank or
+  filter its suggestions using the AST context, then score it with the same
+  cross validation.
+- Code analysis (analysis/): patterns.py will flag beginner patterns like
+  long if elif chains and nested loops (only the helper count_if_chain is
+  done so far). complexity.py will guess the Big O of each function from its
+  loop nesting. static_checks.py will wrap Pylint, Ruff and Radon into the
+  same finding format.
+- API (api/app.py): fill in the suggest endpoint so it returns the top 5
+  suggestions for the word at the cursor, and the analyze endpoint so it
+  returns findings and fixes. Both return empty answers for now.
+- Frontend (frontend/): a code editor page that calls the API and shows
+  suggestions as the student types. Nothing is built there yet.
+- Experiments and write up: run the cross validation for the hybrid model
+  too, compare all models, and report the results. The n gram sweep above is
+  already done.
